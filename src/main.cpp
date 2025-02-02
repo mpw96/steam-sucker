@@ -1,11 +1,15 @@
 #include <ELECHOUSE_CC1101_SRC_DRV.h>
+#include <Homie.h>
 
-// for esp8266
-//   GDO0 on pin 5 = D1.
-//   GDO2 on pin
-# define CC1101_GDO0 5
-# define CC1101_GDO2 4
+// homie firmware
+#define FW_NAME_HOMIE "steam-sucker-controller"
+#define FW_VERSION_HOMIE "0.0.2"
 
+// pins for CC1101
+#define CC1101_GDO0 5
+#define CC1101_GDO2 4
+
+// cooker hood signals for light and fan, recorded via flipper zero from original remote control
 #define LENGTH_LIGHT_TOGGLE 183
 int light_toggle_data[LENGTH_LIGHT_TOGGLE] = {248556,-4600,509,-532,541,-822,235,-466,575,-486,575,-782,273,-464,571,-788,277,-796,279,-752,273,-446,609,-772,295,-408,641,-740,291,-15430,341,-760,287,-418,651,-720,307,-762,287,-406,639,-430,615,-752,307,-398,651,-418,613,-748,313,-408,647,-748,309,-724,315,-760,283,-406,649,-750,309,-418,613,-746,325,-15408,359,-728,319,-386,649,-742,299,-748,321,-378,655,-390,657,-748,309,-398,647,-386,679,-714,317,-402,659,-718,313,-722,329,-746,289,-406,655,-722,321,-416,653,-718,321,-15418,359,-730,309,-386,667,-712,327,-740,321,-374,669,-378,671,-708,321,-400,655,-392,653,-748,309,-398,647,-742,315,-732,317,-738,285,-418,639,-740,319,-396,653,-720,319,-256432,131,-1112,97,-2468,97,-2154,165,-2450,65,-366,365,-200,135,-438,305,-100,565,-66,265,-166,231,-166,127,-262,129,-100,63,-66,197,-298,421,-198,293,-66,131,-232,355,-130,2123};
 
@@ -30,26 +34,28 @@ void initCC1101() {
     ELECHOUSE_cc1101.setMHZ(433.92);
     ELECHOUSE_cc1101.SetTx();
     ELECHOUSE_cc1101.setModulation(2); // OOK (on-off-keying)
-    ELECHOUSE_cc1101.setPA(10);  // -30, -20, -15, -10, 0, 5, 7, 10 (default is 10, which is max)
+    ELECHOUSE_cc1101.setPA(5);  // -30, -20, -15, -10, 0, 5, 7, 10 (default is 10, which is max)
 
     if (ELECHOUSE_cc1101.getCC1101()) {
-        Serial.println("Connection OK");
+        Serial.println("Connection to CC1101 OK");
     }
     else {
-        Serial.println("Connection Error");
+        Serial.println("Connection to CC1101 Error");
     }
 }
 
+// sending data to CC1101
 void sendData(int data[], int dataLength) {
-    for (int i=0; i < dataLength; i++) {
-        // TRANSMIT
+    // if the number is positive, we send a 1 and delay for the amount
+    // if the number is negative, we send a 0 and delay for the amount
+    for (int i=0; i < dataLength; ++i) {
         byte sendMe = 1;
         int delay = data[i];
         if(delay < 0) {
             // DONT TRANSMIT
-            delay = delay * -1;
             sendMe = 0;
         }
+        delay = abs(delay);
 
         digitalWrite(CC1101_GDO0, sendMe);
         delayMicroseconds(delay);
@@ -60,63 +66,103 @@ void sendData(int data[], int dataLength) {
 }
 
 void sendLightToggle() {
-    Serial.println("Send toggle light.");
+    Serial.println("cc1101-sending toggle light.");
     sendData(light_toggle_data, LENGTH_LIGHT_TOGGLE);
     Serial.println("Done.");
 }
 
 void sendLightOn() {
-    Serial.println("Send light on.");
+    Serial.println("cc1101-sending light on.");
     sendData(light_on_data, LENGTH_LIGHT_ON);
     Serial.println("Done.");
 }
 
 void sendLightOff() {
-    Serial.println("Send light off.");
+    Serial.println("cc1101-sending light off.");
     sendData(light_off_data, LENGTH_LIGHT_OFF);
     Serial.println("Done.");
 }
 
 void sendFanOff() {
-    Serial.println("Send fan off.");
+    Serial.println("cc1101-sending fan off.");
     sendData(fan_off_data, LENGTH_FAN_OFF);
     Serial.println("Done.");
 }
 
 void sendFanMinus() {
-    Serial.println("Send fan minus.");
+    Serial.println("cc1101-sending fan minus.");
     sendData(fan_minus_data, LENGTH_FAN_MINUS);
     Serial.println("Done.");
 }
 
 void sendFanPlus() {
-    Serial.println("Send fan plus.");
+    Serial.println("cc1101-sending fan plus.");
     sendData(fan_plus_data, LENGTH_FAN_PLUS);
     Serial.println("Done.");
 }
 
+bool THE_STEAMSUCKER_LIGHT_IS_ON(false);
+HomieNode steamsuckerLightNode("light", "Licht", "switch");
+
+const unsigned long STATUS_SEND_INTERVAL_MILLIS(1000UL);
+unsigned long statusSentAt(0);
+const String trueString("true");
+const String falseString("false");
+
+void homieLoopFunction() {
+    unsigned long now(millis());
+    if (0 == statusSentAt || (now - statusSentAt >= STATUS_SEND_INTERVAL_MILLIS)) {
+        //Homie.getLogger() << "homie-sending light is " << (THE_STEAMSUCKER_LIGHT_IS_ON ? "on" : "off") << "." << endl;
+        steamsuckerLightNode.setProperty("on").send(THE_STEAMSUCKER_LIGHT_IS_ON ? trueString : falseString);
+        statusSentAt = now;
+    }
+
+    delay(250);
+}
+
+bool steamsuckerLightOnHandler(const HomieRange& range, const String& value) {
+    Homie.getLogger() << "steamsuckerLightOnHandler called." << endl;
+    if (value != trueString && value != falseString) {
+        Homie.getLogger() << "unrecognised value " << value << ", doing nothing." << endl;
+        return false;
+    }
+
+    THE_STEAMSUCKER_LIGHT_IS_ON = (value == trueString);
+
+    // this is the actual switching of the light
+    if (THE_STEAMSUCKER_LIGHT_IS_ON) {
+        sendLightOn();
+    }
+    else {
+        sendLightOff();
+    }
+
+    // send the current light status
+    Homie.getLogger() << "homie-sending light is now " << (THE_STEAMSUCKER_LIGHT_IS_ON ? "on" : "off") << "." << endl;
+    steamsuckerLightNode.setProperty("on").send(value);
+
+   return true;
+}
+
 void setup() {
     Serial.begin(115200);
+    Serial.println();
+    Serial.println();
+    Serial.println("Starting setup...");
     initCC1101();
+    Homie_setFirmware(FW_NAME_HOMIE, FW_VERSION_HOMIE);
+    Homie.setLoopFunction(homieLoopFunction);
+
+    steamsuckerLightNode.advertise("on").setName("On").setDatatype("boolean").settable(steamsuckerLightOnHandler);
+    Homie.setup();
+
+    Serial.println("Setup done.");
+
+    // light is off initially
+    sendLightOff();
+    steamsuckerLightNode.setProperty("on").send(falseString);
 }
 
 void loop() {
-    Serial.println("Start.");
-    sendLightOn();
-    delay(500);
-    sendFanPlus();
-    delay(4000);
-    sendLightOn();
-    delay(500);
-    sendFanPlus();
-    delay(4000);
-    sendFanMinus();
-    delay(4000);
-    sendFanOff();
-    delay(500);
-    sendLightOff();
-    delay(500);
-    sendLightOff();
-    Serial.println("Sleep 10 seconds.");
-    delay(10000);
+    Homie.loop();
 }
