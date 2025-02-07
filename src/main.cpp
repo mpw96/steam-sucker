@@ -111,6 +111,7 @@ HomieNode steamsuckerLightNode("light", "Licht", "switch");
 
 bool THE_STEAMSUCKER_FAN_IS_ON(false);
 long THE_STEAMSUCKER_FAN_SPEED(1); // 1 - slow, ..., 4 - max
+long THE_STEAMSUCKER_FAN_PERCENTAGE(25); // 1 - slow, ..., 100 - max
 HomieNode steamsuckerFanNode("sucker", "Ventilator", "fan");
 
 const unsigned long STATUS_SEND_INTERVAL_MILLIS(1000UL);
@@ -127,6 +128,7 @@ void homieLoopFunction() {
         steamsuckerLightNode.setProperty("on").send(THE_STEAMSUCKER_LIGHT_IS_ON ? trueString : falseString);
         steamsuckerFanNode.setProperty("on").send(THE_STEAMSUCKER_FAN_IS_ON ? trueString : falseString);
         steamsuckerFanNode.setProperty("speed").send(String(THE_STEAMSUCKER_FAN_SPEED));
+        steamsuckerFanNode.setProperty("percentage").send(String(THE_STEAMSUCKER_FAN_PERCENTAGE));
         statusSentAt = now;
     }
 }
@@ -154,67 +156,38 @@ bool steamsuckerLightOnHandler(const HomieRange& range, const String& value) {
     return true;
 }
 
-bool steamsuckerFanHandler(const HomieRange& range, const String& value) {
-    Homie.setIdle(false);
-    Homie.getLogger() << "steamsuckerFanHandler called." << endl;
-    bool fan_is_on_old = THE_STEAMSUCKER_FAN_IS_ON;
-
-    if (value == trueString || value == falseString) {
-        THE_STEAMSUCKER_FAN_IS_ON = (value == trueString);
-
-        if (!THE_STEAMSUCKER_FAN_IS_ON) {
-            sendFanOff();
-            Homie.getLogger() << "fan is now off." << endl;
-        }
-    }
-
-    long wantedSpeed(-1);
-    if (fan_is_on_old != THE_STEAMSUCKER_FAN_IS_ON) {
-        wantedSpeed = THE_STEAMSUCKER_FAN_SPEED;
-    }
-    else {
-        for (byte i = 0; i < value.length(); ++i) {
-            if (!isDigit(value.charAt(i))) {
-                Homie.getLogger() << "unrecognised value " << value << ", doing nothing." << endl;
-                Homie.setIdle(true);
-                return false;
-            }
-        }
-        wantedSpeed = value.toInt();
-    }
-
-    if (wantedSpeed<1 || wantedSpeed>4) {
-        Homie.getLogger() << "value " << wantedSpeed << " not in allowed interval [1,4], doing nothing." << endl;
-        Homie.setIdle(true);
-        return false;
-    }
-
-    Homie.getLogger() << "wantedSpeed is " << wantedSpeed << "." << endl;
-
-    if (!THE_STEAMSUCKER_FAN_IS_ON) {
-        Homie.getLogger() << "just setting fan speed variable to " << wantedSpeed << ", because the fan is off and we leave it off." << endl;
-        THE_STEAMSUCKER_FAN_SPEED = wantedSpeed;
-        Homie.setIdle(true);
+bool manageFan(bool fan_on_wanted, long fan_speed_wanted) {
+    // either on/off changes or speed changes, never both
+    if (!fan_on_wanted && THE_STEAMSUCKER_FAN_IS_ON) {
+        // fan is being switched off, speed cannot have changed
+        sendFanOff();
+        THE_STEAMSUCKER_FAN_IS_ON = false;
         return true;
     }
 
-    // at this point, we know that the fan is on
+    if (!fan_on_wanted && !THE_STEAMSUCKER_FAN_IS_ON) {
+        // fan is off and not touched, just set new preset
+        Homie.getLogger() << "just setting fan speed variable to " << fan_speed_wanted << ", because the fan is off and we leave it off." << endl;
+        THE_STEAMSUCKER_FAN_SPEED = fan_speed_wanted;
+        return true;
+    }
+
     long accelerationSteps(0);
     long decelerationSteps(0);
 
-    if (!fan_is_on_old) {
+    if (fan_on_wanted && !THE_STEAMSUCKER_FAN_IS_ON) {
         // fan has just been switched on, we must do all acceleration steps
         THE_STEAMSUCKER_FAN_SPEED = 0;
     }
 
-    if (wantedSpeed>THE_STEAMSUCKER_FAN_SPEED) {
-        accelerationSteps = wantedSpeed-THE_STEAMSUCKER_FAN_SPEED;
-        Homie.getLogger() << "accelerating fan speed from " << THE_STEAMSUCKER_FAN_SPEED << " to " << wantedSpeed << "." << endl;
+    if (fan_speed_wanted>THE_STEAMSUCKER_FAN_SPEED) {
+        accelerationSteps = fan_speed_wanted - THE_STEAMSUCKER_FAN_SPEED;
+        Homie.getLogger() << "accelerating fan speed from " << THE_STEAMSUCKER_FAN_SPEED << " to " << fan_speed_wanted << "." << endl;
     }
 
-    if (wantedSpeed<THE_STEAMSUCKER_FAN_SPEED) {
-        decelerationSteps = THE_STEAMSUCKER_FAN_SPEED-wantedSpeed;
-        Homie.getLogger() << "reducing fan speed from " << THE_STEAMSUCKER_FAN_SPEED << " to " << wantedSpeed << "." << endl;
+    if (fan_speed_wanted<THE_STEAMSUCKER_FAN_SPEED) {
+        decelerationSteps = THE_STEAMSUCKER_FAN_SPEED-fan_speed_wanted;
+        Homie.getLogger() << "reducing fan speed from " << THE_STEAMSUCKER_FAN_SPEED << " to " << fan_speed_wanted << "." << endl;
     }
 
     for (; accelerationSteps>0; --accelerationSteps) {
@@ -225,12 +198,93 @@ bool steamsuckerFanHandler(const HomieRange& range, const String& value) {
         sendFanMinus();
     }
 
-    THE_STEAMSUCKER_FAN_SPEED = wantedSpeed;
+    THE_STEAMSUCKER_FAN_IS_ON = true;
+    THE_STEAMSUCKER_FAN_SPEED = fan_speed_wanted;
     Homie.getLogger() << "reached desired fan speed " << THE_STEAMSUCKER_FAN_SPEED << "." << endl;
-    Homie.setIdle(true);
-
     return true;
 }
+
+bool steamsuckerFanOnHandler(const HomieRange& range, const String& value) {
+    Homie.getLogger() << "steamsuckerFanOnHandler called." << endl;
+    if (value != trueString && value != falseString) {
+        Homie.getLogger() << "unrecognised value " << value << ", doing nothing." << endl;
+        return false;
+    }
+
+    bool fan_on_wanted = (value == trueString);
+
+    if (THE_STEAMSUCKER_FAN_IS_ON == fan_on_wanted) {
+        // the fan is already in the state where it's wanted to be
+        Homie.getLogger() << "fan is already " << (THE_STEAMSUCKER_FAN_IS_ON ? "on" : "off") << ", doing nothing." << endl;
+        return true;
+    }
+
+    return manageFan(fan_on_wanted, THE_STEAMSUCKER_FAN_SPEED);
+}
+
+bool steamsuckerFanPresetHandler(const HomieRange& range, const String& value) {
+    Homie.getLogger() << "steamsuckerFanPresetHandler called." << endl;
+    for (byte i = 0; i < value.length(); ++i) {
+        if (!isDigit(value.charAt(i))) {
+            Homie.getLogger() << "unrecognised value " << value << ", doing nothing." << endl;
+            return false;
+        }
+    }
+    long wantedSpeed = value.toInt();
+    if (wantedSpeed<1 || wantedSpeed>4) {
+        Homie.getLogger() << "value " << wantedSpeed << " not in allowed interval [1,4], doing nothing." << endl;
+        return false;
+    }
+
+    if (THE_STEAMSUCKER_FAN_SPEED == wantedSpeed) {
+        // the fan already has the speed where it's wanted to be
+        Homie.getLogger() << "fan has already speed " << THE_STEAMSUCKER_FAN_SPEED << ", doing nothing." << endl;
+        return true;
+    }
+
+    THE_STEAMSUCKER_FAN_PERCENTAGE = wantedSpeed * 25;
+    return manageFan(THE_STEAMSUCKER_FAN_IS_ON, wantedSpeed);
+}
+
+bool steamsuckerFanPercentageHandler(const HomieRange& range, const String& value) {
+    Homie.getLogger() << "steamsuckerFanPercentageHandler called." << endl;
+    for (byte i = 0; i < value.length(); ++i) {
+        if (!isDigit(value.charAt(i))) {
+            Homie.getLogger() << "unrecognised value " << value << ", doing nothing." << endl;
+            return false;
+        }
+    }
+    long wantedPercentage = value.toInt();
+    if (wantedPercentage<1 || wantedPercentage>100) {
+        Homie.getLogger() << "value " << wantedPercentage << " is not a valid percentage [1,100], doing nothing." << endl;
+        return false;
+    }
+
+    // convert percentage [1,100] to preset [1,4]
+    long wantedSpeed(-1);
+    if (wantedPercentage < 38) {
+        wantedSpeed = 1;
+    }
+    else if (wantedPercentage < 63) {
+        wantedSpeed = 2;
+    }
+    else if (wantedPercentage < 88) {
+        wantedSpeed = 3;
+    }
+    else {
+        wantedSpeed = 4;
+    }
+
+    Homie.getLogger() << "mapping " << wantedPercentage << " percent to speed " << wantedSpeed << "." << endl;
+    THE_STEAMSUCKER_FAN_PERCENTAGE = wantedPercentage;
+    if (THE_STEAMSUCKER_FAN_SPEED == wantedSpeed) {
+        // the fan already has the speed where it's wanted to be
+        Homie.getLogger() << "fan has already speed " << THE_STEAMSUCKER_FAN_SPEED << ", doing nothing." << endl;
+        return true;
+    }
+    return manageFan(THE_STEAMSUCKER_FAN_IS_ON, wantedSpeed);
+}
+
 
 void onHomieEvent(const HomieEvent& event) {
     Homie.getLogger() << "received event " << (uint8_t) event.type << "." << endl;
@@ -248,8 +302,9 @@ void setup() {
     Homie.onEvent(onHomieEvent);
 
     steamsuckerLightNode.advertise("on").setName("On").setDatatype("boolean").settable(steamsuckerLightOnHandler);
-    steamsuckerFanNode.advertise("on").setName("On").setDatatype("boolean").settable(steamsuckerFanHandler);
-    steamsuckerFanNode.advertise("speed").setName("Speed").setDatatype("integer").setFormat("1:4").settable(steamsuckerFanHandler);
+    steamsuckerFanNode.advertise("on").setName("On").setDatatype("boolean").settable(steamsuckerFanOnHandler);
+    steamsuckerFanNode.advertise("speed").setName("Speed").setDatatype("integer").setFormat("1:4").settable(steamsuckerFanPresetHandler);
+    steamsuckerFanNode.advertise("percentage").setName("Percentage").setDatatype("integer").setFormat("1:100").settable(steamsuckerFanPercentageHandler);
     Homie.setup();
 
     Serial.println("Setup done.");
