@@ -13,19 +13,19 @@ I also contributed them [here](https://github.com/UberGuidoZ/Flipper/tree/main/S
 
 ### Parts
 
-I'm using a TI CC1101 transceiver and a Wemos D1 mini board:
+I'm using a TI CC1101 transceiver and a WeMos D1 mini board:
+
 ![cc1101](cc1101.jpg)
 ![d1mini](wemos_d1_mini.png)
 
 Pinout for the CC1101:
+
 ![cc1101_pins](cc1101_pins.jpg)
 
 Pin 7 on the CC1101 is actually MISO.
 Seems to be a typo on the image.
-
 CC1101 pin image downloaded from https://www.amazon.de/dp/B0CPY5386Z on February 8th, 2025.
-
-Wemos image downloaded from https://lastminuteengineers.com/wemos-d1-mini-pinout-reference on February 8th, 2025.
+WeMos image downloaded from https://lastminuteengineers.com/wemos-d1-mini-pinout-reference on February 8th, 2025.
 
 ### Wiring
 
