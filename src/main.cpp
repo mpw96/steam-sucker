@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: GPL-3.0-only
+
+/*
+ * Steam Sucker - ESP8266 firmware to make an Elica cooker hood smart.
+ * Copyright (C) 2025 Marc-Philip Werner
+ */
+
 #include <ELECHOUSE_CC1101_SRC_DRV.h>
 #include <Homie.h>
 
