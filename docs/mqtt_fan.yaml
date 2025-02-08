@@ -1,0 +1,24 @@
+light:
+  - name: "Licht Dunstabzugshaube"
+    command_topic: "homie/steamsucker/light/on/set"
+    state_topic: "homie/steamsucker/light/on"
+    payload_on: "true"
+    payload_off: "false"
+
+fan:
+  - name: "Dunstabzugshaube"
+    command_topic: "homie/steamsucker/sucker/on/set"
+    state_topic: "homie/steamsucker/sucker/on"
+    payload_on: "true"
+    payload_off: "false"
+    speed_range_min: 1
+    speed_range_max: 100
+    preset_modes:
+      - "1"
+      - "2"
+      - "3"
+      - "4"
+    preset_mode_command_topic: "homie/steamsucker/sucker/speed/set"
+    preset_mode_state_topic: "homie/steamsucker/sucker/speed"
+    percentage_command_topic: "homie/steamsucker/sucker/percentage/set"
+    percentage_state_topic: "homie/steamsucker/sucker/percentage"
