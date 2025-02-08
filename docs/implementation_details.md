@@ -31,9 +31,23 @@ This is the actual wiring. I found it at [SmartRC-CC1101-Driver-Lib](https://git
 
 SmartRC-CC1101-Driver-Lib is also the awesome library that I'm using.
 
+## Software
+
+Here is where I found how to send a recording from Flipper Zero: [simondankelmann/Esp32-SubGhz](https://github.com/simondankelmann/Esp32-SubGhz).
+
+One very interesting section is [Transmit Flipper Zero .sub Files](https://github.com/simondankelmann/Esp32-SubGhz/blob/main/Esp32/Esp32-CC1101-Standalone/README.md#transmit-flipper-zero-sub-files).
+This and the sketch [ESP32_CC1101_STANDALONE.ino](https://github.com/simondankelmann/Esp32-SubGhz/blob/main/Esp32/Esp32-CC1101-Standalone/ESP32_CC1101_STANDALONE/ESP32_CC1101_STANDALONE.ino) helped me a lot to understand what's what.
+
+[homieiot/homie-esp8266](https://github.com/homieiot/homie-esp8266) is used for the MQTT communication.
+
 # Integration into Home Assistant
 
 The fan is integrated via the [MQTT Fan](https://www.home-assistant.io/integrations/fan.mqtt) integration.
 The light is integrated via the [MQTT Light](https://www.home-assistant.io/integrations/light.mqtt) integration.
 
 I am using [this yaml](mqtt_fan.yaml).
+
+# Open points
+
+* I don't understand why we are using `digitalWrite` to do the actual sending and not some method of `ELECHOUSE_cc1101`.
+* Sometimes the D1 mini crashes. This seems to happen when the network task wants to do something while the fan speed is currently being changed. How can this be handled better?
