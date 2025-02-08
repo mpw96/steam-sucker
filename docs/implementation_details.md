@@ -23,6 +23,10 @@ Pinout for the CC1101:
 Pin 7 on the CC1101 is actually MISO.
 Seems to be a typo on the image.
 
+CC1101 pin image downloaded from https://www.amazon.de/dp/B0CPY5386Z on February 8th, 2025.
+
+Wemos image downloaded from https://lastminuteengineers.com/wemos-d1-mini-pinout-reference on February 8th, 2025.
+
 ### Wiring
 
 This is the actual wiring. I found it at [SmartRC-CC1101-Driver-Lib](https://github.com/LSatan/SmartRC-CC1101-Driver-Lib):
