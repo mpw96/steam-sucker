@@ -9,7 +9,7 @@ It can either be operated with a "magic wand" or a remote control.
 
 Both the magic wand and the remote control are cumbersome to use.
 A friend put the idea in my head to make the cooker hood smart.
-So I integrated it into my Home Assistant.
+So I integrated it into my [Home Assistant](https://www.home-assistant.io).
 Here is the result.
 
 # End user perspective
